@@ -298,3 +298,20 @@ test("processToolArgs routes tool call arguments to the processor when enabled",
   assert.equal(received.length, 1, "tool call arguments must reach the processor when opted in");
   assert.ok(output.includes("MUTATED"), "processor output must replace tool JSON when opted in");
 });
+
+test("Anthropic usage.inference_geo/speed and signature_delta.signature pass through untouched", async () => {
+  const received: string[] = [];
+  const transform = createSseTextTransform((text) => {
+    received.push(text);
+    return text;
+  });
+  const usageEvent = `data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":3,"inference_geo":"global","speed":"standard"}}\n\n`;
+  const sigEvent = `data: {"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"EqQBCkYI"}}\n\n`;
+
+  const output = await testTransform(transform, [usageEvent, sigEvent]);
+
+  assert.deepEqual(received, []);
+  assert.ok(output.includes(`"inference_geo":"global"`));
+  assert.ok(output.includes(`"speed":"standard"`));
+  assert.ok(output.includes(`"signature":"EqQBCkYI"`));
+});

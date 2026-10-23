@@ -51,6 +51,10 @@ export const METADATA_KEYS = new Set([
   "response_id",
   "previous_response_id",
   "status",
+  // Anthropic usage / thinking-block metadata: opaque strings, never user text.
+  "inference_geo",
+  "speed",
+  "signature",
 ]);
 
 // Responses API events whose `delta` carries tool-call arguments (JSON), not answer text.
