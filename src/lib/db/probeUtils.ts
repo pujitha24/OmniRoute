@@ -109,7 +109,25 @@ export function retryProbeIfTransient(
   }
 
   console.warn(
-    `[DB] All ${retryDelays.length} transient probe retries exhausted — declaring corruption`
+    `[DB] All ${retryDelays.length} transient probe retries exhausted`
   );
   return false;
+}
+
+/**
+ * True when a probe failure says nothing about the file's integrity, so the DB
+ * must be left in place and startup must fail instead of renaming it away:
+ * SQLITE_READONLY (read-only volume / query_only) and still-failing
+ * BUSY/PROTOCOL/IOERR after the retries were exhausted. ENOENT is excluded —
+ * a missing file has nothing to preserve.
+ */
+export function isNonCorruptionProbeError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/SQLITE_READONLY|readonly database|read-only database/i.test(message)) return true;
+  if (/ENOENT/i.test(message)) return false;
+  if (isTransientProbeError(error)) return true;
+  if (typeof error !== "object" || error === null) return false;
+  const { code, errcode } = error as { code?: unknown; errcode?: unknown };
+  if (typeof code === "string" && code.startsWith("SQLITE_READONLY")) return true;
+  return typeof errcode === "number" && (errcode & 0xff) === 8;
 }

@@ -13,7 +13,7 @@ import {
   openDatabaseAsync,
 } from "./adapters/driverFactory";
 import path from "path";
-import { retryProbeIfTransient } from "./probeUtils";
+import { isNonCorruptionProbeError, retryProbeIfTransient } from "./probeUtils";
 import fs from "fs";
 import { resolveWritableDataDir, getLegacyDotDataDir } from "../dataPaths";
 import { isNextBuildPhase } from "../buildPhase";
@@ -1213,6 +1213,15 @@ export function getDbInstance(): SqliteDatabase {
         );
       }
       if (!retryProbeIfTransient(sqliteFile, e, openSqliteDatabase, closeProbeIfSafe)) {
+        // READONLY / exhausted BUSY|IOERR|PROTOCOL retries do not prove corruption:
+        // leave the DB, -wal and -shm untouched and fail startup instead of renaming.
+        if (isNonCorruptionProbeError(e)) {
+          throw new Error(
+            `[DB] Aborting startup: could not open ${sqliteFile} (${message}). ` +
+              `This is not a corruption signal, so the database was left untouched. ` +
+              `Check file permissions / read-only mounts / locks and restart.`
+          );
+        }
         preservedCriticalState = captureCriticalDbState(sqliteFile);
         // SAFETY: Never delete the database — rename to backup so data can be recovered.
         // The old code would silently destroy all user data on any probe failure.
