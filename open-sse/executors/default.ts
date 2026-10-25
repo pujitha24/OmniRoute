@@ -939,7 +939,13 @@ export class DefaultExecutor extends BaseExecutor {
         }
       } else if (stream && targetFormat === "openai" && requestFormat !== "openai-responses") {
         // Do not inject stream_options when the outgoing body explicitly disables streaming.
-        const defaultsRecord = withDefaults as Record<string, unknown>;
+        let defaultsRecord = withDefaults as Record<string, unknown>;
+        // forceStream providers only accept streaming upstream (chatCore drains the SSE back
+        // into JSON for the client), so an explicit client `stream:false` must not reach them.
+        if (defaultsRecord.stream === false && getRegistryEntry(this.provider)?.forceStream) {
+          defaultsRecord = { ...defaultsRecord, stream: true };
+          withDefaults = defaultsRecord;
+        }
         const bodyDisablesStreamOptions =
           defaultsRecord.stream !== undefined && defaultsRecord.stream !== true;
         if (bodyDisablesStreamOptions) {
