@@ -33,6 +33,7 @@ import {
 import { CODEX_NATIVE_UNPREFIXED_MODELS } from "@omniroute/open-sse/services/model";
 import { isModelSelectable } from "@omniroute/open-sse/services/modelLifecycle";
 import { resolveNestedComboTargets } from "@omniroute/open-sse/services/combo";
+import { expandProviderWildcardsInCollection } from "@omniroute/open-sse/services/combo/providerWildcard";
 import {
   AUTO_TEMPLATE_VARIANTS,
   AUTO_SUFFIX_VARIANTS,
@@ -472,7 +473,17 @@ async function buildUnifiedModelsResponseCore(
     let combos = [];
     await yieldCatalogBuildTurn();
     try {
-      combos = await getCombos();
+      // Expand provider wildcards (e.g. `groq/openai/gpt-oss-*`) against the synced catalog,
+      // exactly as dispatch does, so wildcard-only combos resolve to concrete targets here.
+      const storedCombos = await getCombos();
+      try {
+        combos = await expandProviderWildcardsInCollection(
+          storedCombos as Parameters<typeof expandProviderWildcardsInCollection>[0]
+        );
+      } catch {
+        // An expansion failure must not hide combos that have no wildcards.
+        combos = storedCombos;
+      }
     } catch (e) {
       console.log("Could not fetch combos");
     }
